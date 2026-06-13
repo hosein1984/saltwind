@@ -1,0 +1,36 @@
+{
+  // In-editor debugging via cppvsdbg (requires the Microsoft C/C++ extension).
+  // This is a lighter alternative to RAD Debugger for simple cases.
+  //
+  // Requirements:
+  //   - Extension: ms-vscode.cpptools
+  //   - Build with -debug so PDB files are generated (handled by preLaunchTask)
+  //
+  // For serious debugging, prefer RAD Debugger via `make debug` / `make debug-rerun`.
+
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug (cppvsdbg)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "preLaunchTask": "Build",
+      "program": "${workspaceFolder}/bin/${workspaceFolderBasename}_debug.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Debug: Pause at Entry (cppvsdbg)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "preLaunchTask": "Build",
+      "program": "${workspaceFolder}/bin/${workspaceFolderBasename}_debug.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": true
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# Build output
+bin/
+*.exe
+*.pdb
+*.rdi
+
+# RAD Debugger
+# .raddbg/project  — the project file (targets, breakpoints) CAN be committed
+#                    if you want shared debugger state. Gitignore it if paths
+#                    are machine-specific (they usually are).
+.raddbg/
+
+# OS
+.DS_Store
+Thumbs.db
+
+libs/*
+!libs/.gitkeep

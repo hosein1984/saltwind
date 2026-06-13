@@ -1,0 +1,31 @@
+{
+  // ── OLS Language Server ───────────────────────────────────────────────────
+  // OLS must be on PATH, or set an absolute path here:
+  // "ols.server.path": "C:/tools/ols/ols.exe",
+
+  // ── Editor: Odin files ───────────────────────────────────────────────────
+  "[odin]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "DanielGavin.ols",
+    "editor.tabSize": 4,
+    "editor.insertSpaces": false,
+    "editor.rulers": [140]
+  },
+
+  // ── File associations ────────────────────────────────────────────────────
+  "files.associations": {
+    "*.odin": "odin"
+  },
+
+  // ── Explorer: hide build artefacts ───────────────────────────────────────
+  "files.exclude": {
+    "bin/":     true,
+    ".raddbg/": true
+  },
+
+  // ── Search: skip generated / vendored directories ────────────────────────
+  "search.exclude": {
+    "bin/":  true,
+    "libs/": true
+  }
+}

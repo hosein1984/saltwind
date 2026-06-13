@@ -1,0 +1,193 @@
+{
+  "version": "2.0.0",
+
+  // Odin error format:  C:/path/file.odin(line:col) Error: message
+  // The problem matcher below parses this and turns errors into clickable
+  // links in VS Code's Problems panel and inline via Error Lens.
+
+  "tasks": [
+
+    // ── Build ────────────────────────────────────────────────────────────────
+
+    {
+      "label": "Build",
+      "type": "shell",
+      "command": "make build",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+    {
+      "label": "Package",
+      "type": "shell",
+      "command": "make package",
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+
+    // ── Check ────────────────────────────────────────────────────────────────
+
+    {
+      "label": "Check",
+      "type": "shell",
+      "command": "make check",
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+    {
+      "label": "Check: Strict",
+      "type": "shell",
+      "command": "make check-strict",
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+
+    // ── Run ──────────────────────────────────────────────────────────────────
+
+    {
+      "label": "Run",
+      "type": "shell",
+      "command": "make run",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+    {
+      "label": "Run: Release",
+      "type": "shell",
+      "command": "make run-release",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+
+    // ── RAD Debugger ─────────────────────────────────────────────────────────
+
+    {
+      "label": "Debug: Open (raddbg)",
+      "detail": "First time per session — opens raddbg and auto-runs. Keep it open.",
+      "type": "shell",
+      "command": "make debug",
+      "group": "none",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+    {
+      "label": "Debug: Step (raddbg)",
+      "detail": "Opens raddbg and pauses at the entry point.",
+      "type": "shell",
+      "command": "make debug-step",
+      "group": "none",
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    // ── Test ─────────────────────────────────────────────────────────────────
+
+    {
+      "label": "Test",
+      "type": "shell",
+      "command": "make test",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+    {
+      "label": "Test: Strict",
+      "type": "shell",
+      "command": "make test-strict",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": {
+        "owner": "odin",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+):(\\d+)\\)\\s+(.+)$",
+          "file": 1, "line": 2, "column": 3, "message": 4
+        }
+      }
+    },
+
+    // ── Format ───────────────────────────────────────────────────────────────
+
+    {
+      "label": "Format",
+      "type": "shell",
+      "command": "make fmt",
+      "group": "none",
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    // ── Misc ─────────────────────────────────────────────────────────────────
+
+    {
+      "label": "Clean",
+      "type": "shell",
+      "command": "make clean",
+      "group": "none",
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    }
+
+  ]
+}
