@@ -10,6 +10,25 @@ WINDOW_WIDTH :: 1280
 WINDOW_HEIGHT :: 720
 WINDOW_TITLE :: "Saltwind"
 
+Sea_Vertex :: struct {
+	position: glsl.vec3,
+	color:    glsl.vec3,
+}
+
+// odinfmt: disable
+vertices := [?]Sea_Vertex{
+	{ position = {-1.0, -1.0, 0.0}, color = {0.02, 0.08, 0.15}}, // 0 near-left, deep
+	{ position = { 1.0, -1.0, 0.0}, color = {0.02, 0.08, 0.15}}, // 1 near-right, deep
+	{ position = { 1.0,  0.0, 0.0}, color = {0.45, 0.58, 0.62}}, // 2 horizon-right, haze
+	{ position = {-1.0,  0.0, 0.0}, color = {0.45, 0.58, 0.62}}, // 3 horizon-left, haze
+}
+indices := [?]u32{
+	0, 1, 2,
+	2, 3, 0,
+}
+// odinfmt: enable
+
+
 main :: proc() {
 	if !glfw.Init() {
 		desc, code := glfw.GetError()
@@ -43,32 +62,27 @@ main :: proc() {
 	// Enable v-sync
 	glfw.SwapInterval(1)
 
-
 	// Setup shaders
 	shader, shader_ok := shader_load("assets/shaders/basic.vert", "assets/shaders/basic.frag")
 	if !shader_ok do return
-	
-	// odinfmt:disable
-	vertices := [?]f32{
-		-0.6, -0.5, 0.0, // left
-		 0.6, -0.5, 0.0, // right
-		 0.0,  0.6, 0.0, // top
-	}
-	// odinfmt:enable
 
-	vao, vbo: u32
+	vao, vbo, ebo: u32
 	gl.GenVertexArrays(1, &vao)
 	gl.GenBuffers(1, &vbo)
+	gl.GenBuffers(1, &ebo)
 
 	gl.BindVertexArray(vao)
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
 	gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices), &vertices, gl.STATIC_DRAW)
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
+	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(indices), &indices, gl.STATIC_DRAW)
 
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 3 * size_of(f32), 0)
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, size_of(Sea_Vertex), offset_of(Sea_Vertex, position))
 	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointer(1, 3, gl.FLOAT, false, size_of(Sea_Vertex), offset_of(Sea_Vertex, color))
+	gl.EnableVertexAttribArray(1)
 
 	gl.BindVertexArray(0)
-
 
 	last_time := glfw.GetTime()
 	reload_timer: f32 = 0.0
@@ -85,13 +99,17 @@ main :: proc() {
 			shader_reload_if_changed(&shader)
 		}
 
-		width, height := glfw.GetFramebufferSize(window)
-
 		// Update
 		glfw.PollEvents()
 		if glfw.GetKey(window, glfw.KEY_ESCAPE) == glfw.PRESS {
 			glfw.SetWindowShouldClose(window, true)
 		}
+
+		polygon_mode := u32(gl.FILL)
+		if glfw.GetKey(window, glfw.KEY_TAB) == glfw.PRESS {
+			polygon_mode = gl.LINE
+		}
+		gl.PolygonMode(gl.FRONT_AND_BACK, polygon_mode)
 
 		// Draw
 		gl.ClearColor(0.04, 0.10, 0.18, 1.0) // deep sea blue
@@ -99,9 +117,8 @@ main :: proc() {
 
 		gl.UseProgram(shader.id)
 		shader_set_f32(shader, "u_time", f32(now))
-		shader_set_vec2(shader, "u_resolution", glsl.vec2{f32(width), f32(height)})
 		gl.BindVertexArray(vao)
-		gl.DrawArrays(gl.TRIANGLES, 0, 3)
+		gl.DrawElements(gl.TRIANGLES, len(indices), gl.UNSIGNED_INT, nil)
 
 		glfw.SwapBuffers(window)
 

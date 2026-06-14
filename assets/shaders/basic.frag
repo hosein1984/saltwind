@@ -1,17 +1,12 @@
 #version 330 core
 
-out vec4 frag_color;
+in vec3 v_color;
 
 uniform float u_time;
-uniform vec2 u_resolution;
+
+out vec4 frag_color;
 
 void main() {
-	vec3 deep = vec3(0.05, 0.25, 0.30);
-	vec3 foam = vec3(0.65, 0.80, 0.78);
-	float pulse = 0.5 + 0.5 * sin(u_time * 1.5);
-	
-	vec3 color = mix(deep, foam, pulse);
-	vec3 tint  = vec3(gl_FragCoord.y / u_resolution, 1.0);
-
-	frag_color = vec4(color * tint, 1.0);
+	float shimmer = 0.04 * sin(u_time * 2.0);
+	frag_color = vec4(v_color + shimmer, 1.0);
 }
