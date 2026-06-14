@@ -39,6 +39,84 @@ The two boxes in caps that say "your program" are where almost all of the visual
 
 OpenGL renders pixels but knows nothing about windows, keyboards, or mice — those are OS concerns. GLFW is the thin, boring, reliable cross-platform library that creates a window, attaches a GL context to it, and feeds you input events. You'll touch maybe fifteen of its functions in the whole course.
 
+### What is a window?
+
+A **window** is an operating-system thing, not an OpenGL thing. On Windows, macOS, and Linux, the desktop environment owns the idea of "a rectangle on screen with a title bar, close button, size, position, focus, and input events." That rectangle can receive mouse movement, keyboard input, resize messages, minimize events, and close requests. It can also expose an area called the **client area**: the part inside the borders where an application is allowed to draw.
+
+OpenGL does not create that rectangle. It does not know about title bars, taskbars, DPI scaling, monitors, or the close button. This is why we need GLFW. When we call:
+
+```odin
+window := glfw.CreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Saltwind", nil, nil)
+```
+
+we are asking GLFW to ask the operating system for a real native window. GLFW then gives us back a handle: `glfw.WindowHandle`. Treat that handle as an opaque ticket. We do not inspect its internals; we hand it back to GLFW when we want to ask questions about that window or perform window-related actions.
+
+### What is an OpenGL context?
+
+An **OpenGL context** is the driver's record of an OpenGL universe.
+
+That sounds grand, but it is precise: a context owns the OpenGL state machine. It remembers things like the currently bound buffer, the current shader program, the enabled depth test, the clear color, the viewport, and eventually the GL objects you create: buffers, textures, vertex arrays, shader programs, framebuffers. When you call `gl.BindBuffer`, `gl.UseProgram`, or `gl.ClearColor`, you are not changing global reality. You are changing state inside the current OpenGL context.
+
+The context is created by the GPU driver, but it must be created *for* some drawable surface. In Chapter 1, GLFW creates a context associated with the window's drawable area. That association gives OpenGL a default framebuffer: the color buffer that will eventually become the pixels visible in the window.
+
+The window and the context are therefore related, but they are not the same thing:
+
+| Thing | Owned by | Job |
+|---|---|---|
+| Window | Operating system, reached through GLFW | A visible rectangle, input target, resize/close events |
+| OpenGL context | GPU driver, reached through OpenGL calls | The GL state machine and the doorway to GPU rendering |
+| Default framebuffer | Provided through the window/context pair | The image storage that appears in the window after buffer swaps |
+
+This distinction matters because later we will create OpenGL objects that have no window-like shape at all: textures, offscreen framebuffers, shadow maps, reflection buffers. OpenGL is not "drawing to a window" in the abstract. It is executing commands inside a current context, targeting whichever framebuffer is currently bound.
+
+### What does `glfw.Init` do?
+
+`glfw.Init()` starts GLFW's internal connection to the platform. Before it succeeds, GLFW is not ready to create windows, query monitors, receive input, or create OpenGL contexts.
+
+Under the hood, the exact work depends on the operating system: loading platform backends, preparing access to the display server, initializing joystick and timer support, setting up internal bookkeeping, and getting ready to translate OS-specific messages into GLFW's cross-platform API. You do not need to memorize the platform details. The important contract is simpler:
+
+1. Call `glfw.Init()` before almost any other GLFW function.
+2. If it returns false, ask `glfw.GetError()` and stop.
+3. After it succeeds, pair it with `glfw.Terminate()` when the program is done.
+
+That last point is why the chapter immediately does this:
+
+```odin
+if !glfw.Init() {
+	desc, code := glfw.GetError()
+	fmt.eprintln("GLFW init failed:", code, desc)
+	return
+}
+defer glfw.Terminate()
+```
+
+`defer` makes the lifetime visible: from this line until the end of `main`, GLFW is alive.
+
+### What does `MakeContextCurrent` mean?
+
+OpenGL calls do not take a `window` or `context` parameter:
+
+```odin
+gl.ClearColor(0.04, 0.10, 0.18, 1.0)
+gl.Clear(gl.COLOR_BUFFER_BIT)
+```
+
+So which context do they affect?
+
+The answer is: the OpenGL context that is **current on the calling thread**.
+
+That is what this line does:
+
+```odin
+glfw.MakeContextCurrent(window)
+```
+
+It tells GLFW: "Take the OpenGL context associated with this window and bind it to this thread." After that, OpenGL commands issued on this thread know which driver's state machine they belong to. Without a current context, modern GL calls either cannot be loaded yet or have no valid target to operate on.
+
+This is also why Chapter 2 will load OpenGL function pointers *after* `MakeContextCurrent`. The loader has to ask the current context's driver for addresses like "where is `glCreateShader`?" No current context means there may be no driver entry point to ask.
+
+For a one-window game, you can almost forget the rule after you call it once. But the rule becomes important in advanced tools and engines: multiple windows, shared contexts, background loading threads, editor viewports, and offscreen render workers all have to be explicit about which context is current where. For Saltwind right now, the story is beautifully small: one window, one context, one main thread.
+
 ## Odin notes
 
 - `vendor:glfw` returns Odin-friendly types: `glfw.Init()` returns a `b32` you can use directly in `if !glfw.Init()`, `glfw.CreateWindow` returns a `glfw.WindowHandle` that is `nil` on failure.
@@ -76,7 +154,7 @@ OpenGL renders pixels but knows nothing about windows, keyboards, or mice — th
 
    From the `saltwind/` root run `odin run src`. You should see `fair winds`. Always run from the project root — asset paths later in the course are relative to it.
 
-4. **Open the window.** Replace `main.odin` with the real thing. Initialize GLFW, then — *before* creating the window — request exactly the context we want with window hints:
+4. **Open the window.** Replace `main.odin` with the real thing. Initialize GLFW first; this wakes up GLFW's platform layer so it is allowed to talk to the OS. Then — *before* creating the window — request exactly the context we want with window hints:
 
    ```odin
    package saltwind
@@ -114,7 +192,7 @@ OpenGL renders pixels but knows nothing about windows, keyboards, or mice — th
    }
    ```
 
-   The hints matter: without them you get a default ("any version, compatibility-ish") context, and on some drivers your core-profile shaders in Chapter 3 would mysteriously fail. `MakeContextCurrent` is the state-machine pattern already: GL calls have no window parameter; they apply to whichever context is *current* on the calling thread.
+   The hints matter: without them you get a default ("any version, compatibility-ish") context, and on some drivers your core-profile shaders in Chapter 3 would mysteriously fail. `CreateWindow` gives us both halves of the first real graphics object in the program: an OS window and a driver-created OpenGL context attached to it. `MakeContextCurrent` then selects that context for this thread. This is the state-machine pattern already: GL calls have no window parameter; they apply to whichever context is *current* on the calling thread.
 
 5. **Keep it alive.** A window with no event loop appears for a millisecond and dies (or freezes, unresponsive, on some platforms). Add at the bottom of `main`:
 
