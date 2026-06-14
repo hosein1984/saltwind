@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:math/linalg/glsl"
 import "core:strings"
 import gl "vendor:OpenGL"
 import "vendor:glfw"
@@ -8,25 +9,6 @@ import "vendor:glfw"
 WINDOW_WIDTH :: 1280
 WINDOW_HEIGHT :: 720
 WINDOW_TITLE :: "Saltwind"
-
-VERTEX_SOURCE :: `#version 330 core
-
-layout (location = 0) in vec3 a_position;
-
-void main() {
-	gl_Position = vec4(a_position, 1.0);
-}
-`
-
-FRAGMENT_SOURCE :: `#version 330 core
-
-out vec4 frag_color;
-
-void main() {
-	frag_color = vec4(0.13, 0.45, 0.40, 1.0);
-}
-`
-
 
 main :: proc() {
 	if !glfw.Init() {
@@ -63,25 +45,8 @@ main :: proc() {
 
 
 	// Setup shaders
-	vs, vs_ok := compile_shader(VERTEX_SOURCE, gl.VERTEX_SHADER)
-	fs, fs_ok := compile_shader(FRAGMENT_SOURCE, gl.FRAGMENT_SHADER)
-	if !vs_ok || !fs_ok do return
-
-	program := gl.CreateProgram()
-	gl.AttachShader(program, vs)
-	gl.AttachShader(program, fs)
-	gl.LinkProgram(program)
-
-	link_ok: i32
-	gl.GetProgramiv(program, gl.LINK_STATUS, &link_ok)
-	if link_ok == 0 {
-		log: [512]u8
-		gl.GetProgramInfoLog(program, 512, nil, raw_data(log[:]))
-		fmt.eprintln("program link error:\n\t", string(log[:]))
-		return
-	}
-	gl.DeleteShader(vs)
-	gl.DeleteShader(fs)
+	shader, shader_ok := shader_load("assets/shaders/basic.vert", "assets/shaders/basic.frag")
+	if !shader_ok do return
 	
 	// odinfmt:disable
 	vertices := [?]f32{
@@ -106,12 +71,21 @@ main :: proc() {
 
 
 	last_time := glfw.GetTime()
+	reload_timer: f32 = 0.0
+
 	for !glfw.WindowShouldClose(window) {
 		// Timing
 		now := glfw.GetTime()
 		dt := f32(now - last_time)
 		last_time = now
-		_ = dt
+
+		reload_timer += dt
+		if reload_timer > 1.0 {
+			reload_timer = 0.0
+			shader_reload_if_changed(&shader)
+		}
+
+		width, height := glfw.GetFramebufferSize(window)
 
 		// Update
 		glfw.PollEvents()
@@ -123,11 +97,15 @@ main :: proc() {
 		gl.ClearColor(0.04, 0.10, 0.18, 1.0) // deep sea blue
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 
-		gl.UseProgram(program)
+		gl.UseProgram(shader.id)
+		shader_set_f32(shader, "u_time", f32(now))
+		shader_set_vec2(shader, "u_resolution", glsl.vec2{f32(width), f32(height)})
 		gl.BindVertexArray(vao)
 		gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
 		glfw.SwapBuffers(window)
+
+		free_all(context.temp_allocator)
 	}
 }
 
