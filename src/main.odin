@@ -12,15 +12,17 @@ WINDOW_TITLE :: "Saltwind"
 
 Sea_Vertex :: struct {
 	position: glsl.vec3,
-	color:    glsl.vec3,
+	uv:       glsl.vec2,
 }
+
+
 
 // odinfmt: disable
 vertices := [?]Sea_Vertex{
-	{ position = {-1.0, -1.0, 0.0}, color = {0.02, 0.08, 0.15}}, // 0 near-left, deep
-	{ position = { 1.0, -1.0, 0.0}, color = {0.02, 0.08, 0.15}}, // 1 near-right, deep
-	{ position = { 1.0,  0.0, 0.0}, color = {0.45, 0.58, 0.62}}, // 2 horizon-right, haze
-	{ position = {-1.0,  0.0, 0.0}, color = {0.45, 0.58, 0.62}}, // 3 horizon-left, haze
+	{position = {-0.5, -0.5, 0.0}, uv = {0.0, 0.0}},
+	{position = { 0.5, -0.5, 0.0}, uv = {1.0, 0.0}},
+	{position = { 0.5,  0.5, 0.0}, uv = {1.0, 1.0}},
+	{position = {-0.5,  0.5, 0.0}, uv = {0.0, 1.0}},
 }
 indices := [?]u32{
 	0, 1, 2,
@@ -66,6 +68,9 @@ main :: proc() {
 	shader, shader_ok := shader_load("assets/shaders/basic.vert", "assets/shaders/basic.frag")
 	if !shader_ok do return
 
+	crate_tex, tex_ok := texture_load("assets/textures/crate.jpg")
+	if !tex_ok do return
+
 	vao, vbo, ebo: u32
 	gl.GenVertexArrays(1, &vao)
 	gl.GenBuffers(1, &vbo)
@@ -79,7 +84,7 @@ main :: proc() {
 
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, size_of(Sea_Vertex), offset_of(Sea_Vertex, position))
 	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointer(1, 3, gl.FLOAT, false, size_of(Sea_Vertex), offset_of(Sea_Vertex, color))
+	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, size_of(Sea_Vertex), offset_of(Sea_Vertex, uv))
 	gl.EnableVertexAttribArray(1)
 
 	gl.BindVertexArray(0)
@@ -116,8 +121,10 @@ main :: proc() {
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 
 		gl.UseProgram(shader.id)
-		shader_set_f32(shader, "u_time", f32(now))
 		gl.BindVertexArray(vao)
+		shader_set_f32(shader, "u_time", f32(now))
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, crate_tex.id)
 		gl.DrawElements(gl.TRIANGLES, len(indices), gl.UNSIGNED_INT, nil)
 
 		glfw.SwapBuffers(window)

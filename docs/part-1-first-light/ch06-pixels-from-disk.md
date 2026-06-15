@@ -10,9 +10,37 @@ Everything on screen so far is computed color. Worlds need *surfaces*: wood grai
 
 ## Concepts
 
-### UV coordinates
+### Texels: image cells, not screen pixels
 
-A texture is addressed in **UV space** (GLSL says `st`, everyone else says `uv`): (0,0) at the bottom-left of the image to (1,1) at the top-right, independent of resolution. Each vertex carries a uv; the rasterizer interpolates it across the triangle; the fragment shader *samples* the texture at the interpolated spot:
+An image file decodes into a rectangular grid of color values. Each cell in that grid is a **texel**: short for *texture element*.
+
+A **pixel** is a cell in the final image on your monitor. A **texel** is a cell in a texture stored in memory. They often line up in simple examples, but they are not the same thing:
+
+```
+texture on disk / GPU memory          final framebuffer
+┌────┬────┬────┬────┐                 ┌────┬────┬────┬────┬────┐
+│ T0 │ T1 │ T2 │ T3 │                 │ P0 │ P1 │ P2 │ P3 │ P4 │
+├────┼────┼────┼────┤                 ├────┼────┼────┼────┼────┤
+│ ... image data ... │       drawn →   │ ... screen output ... │
+└────┴────┴────┴────┘                 └────┴────┴────┴────┴────┘
+```
+
+A 1024×1024 crate texture always has 1,048,576 texels. Draw that crate as a tiny distant square and many texels contribute to one screen pixel. Draw it huge and many screen pixels may be colored from the same few texels. Texture sampling is the machinery that answers, "Given this spot on the surface, which texture color should this screen pixel receive?"
+
+That idea is renderer-wide, not OpenGL-specific. Metal, Direct3D, Vulkan, and WebGPU all have the same split: image data made of texels, screen output made of pixels, and a sampler in between.
+
+### UV coordinates: positions on the image
+
+A texture is addressed in **UV space**. OpenGL and GLSL often call the same axes **S** and **T**, so you will see both names:
+
+| Teaching name | OpenGL name | Direction on a normal 2D image |
+|---|---|---|
+| `u` | `s` | left → right |
+| `v` | `t` | bottom → top |
+
+UVs are normalized: `(0,0)` is the bottom-left of the image and `(1,1)` is the top-right, independent of resolution. A 256×256 texture and a 4096×4096 texture use the same UV range.
+
+Each vertex carries a UV coordinate; the rasterizer interpolates those UVs across the triangle; then the fragment shader samples the texture at the interpolated spot:
 
 ```
  (0,1)        (1,1)        v3──────v2     vertex → uv
@@ -22,13 +50,72 @@ A texture is addressed in **UV space** (GLSL says `st`, everyone else says `uv`)
  (0,0)        (1,0)        v0──────v1
 ```
 
-### Wrap modes
+The important phrase is **interpolated spot**. The shader usually asks for a position between texel centers, such as `u = 0.372`. Real texture coordinates are continuous. The stored texel grid is discrete. The sampler has to turn that in-between request into a color.
 
-What does sampling at uv = 1.7 mean? Your choice, per axis: `gl.REPEAT` (tile — fractional part only; what the sea will use to tile wave detail forever), `gl.MIRRORED_REPEAT`, `gl.CLAMP_TO_EDGE` (smear the border pixel — right for things that shouldn't tile), `gl.CLAMP_TO_BORDER`.
+### Sampling: asking a texture for a color
 
-### Filtering
+In the fragment shader, this line is the sample:
 
-UVs are continuous; texels are discrete — sampling almost never lands dead-center on one. `gl.NEAREST` grabs the closest texel (crunchy, deliberate-retro). `gl.LINEAR` blends the 4 surrounding texels (smooth). Set separately for magnification (texture too close — blown up) and minification (too far — shrunk).
+```glsl
+frag_color = texture(u_texture, v_uv);
+```
+
+Read it as: "Sampler, use `u_texture`'s current rules to answer what color lives at `v_uv`."
+
+The sampler does several small jobs in order:
+
+1. Take the interpolated UV from the fragment.
+2. Apply the wrap mode if `u` or `v` is outside the normal 0–1 range.
+3. Decide whether the texture is being magnified, minified, and which mip level fits.
+4. Fetch one or more texels.
+5. Filter those texels into one returned color.
+
+The texture is not pasted onto the quad once. Sampling happens per fragment, every frame. The vertex UVs just give the rasterizer enough information to produce a UV for each fragment.
+
+### Wrap modes: what happens outside 0–1
+
+What does sampling at `u = 1.7` mean? Your choice, per axis.
+
+OpenGL names the axes `S` and `T`, so these two calls configure the horizontal and vertical texture directions separately:
+
+```odin
+gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT) // u/s axis
+gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT) // v/t axis
+```
+
+For our crate, both axes use the same rule, but they do not have to. Later, a texture might repeat horizontally while clamping vertically.
+
+- `gl.REPEAT`: tile the texture; `1.7` behaves like `0.7`.
+- `gl.MIRRORED_REPEAT`: tile, but every other tile flips direction.
+- `gl.CLAMP_TO_EDGE`: clamp to the nearest edge texel; right for images that should not tile, like UI icons.
+- `gl.CLAMP_TO_BORDER`: return a chosen border color outside the image.
+
+This is the first "axis" to keep straight: **wrap axes are UV axes**. `WRAP_S` is the `u` direction. `WRAP_T` is the `v` direction.
+
+### Filtering: how several texels become one color
+
+Filtering means **reconstructing a color from discrete texels**. The shader asks for a continuous position; the texture only stores a grid. The filter is the rule that bridges those two worlds.
+
+The two basic filters are:
+
+- `gl.NEAREST`: choose the nearest texel center. This gives hard square edges when magnified.
+- `gl.LINEAR`: blend neighboring texels. On a 2D texture, this blends in both `u/s` and `v/t`, usually using the 4 nearest texels. This is often called **bilinear filtering**.
+
+So filtering also has UV axes, but they are not configured with separate `FILTER_S` and `FILTER_T` settings in basic OpenGL. `gl.LINEAR` on a 2D texture means "blend across the local 2D texel grid."
+
+Now the second "axis" to keep straight: **minification vs. magnification is not horizontal vs. vertical**. It is about scale.
+
+- **Magnification**: the texture is being enlarged on screen. One texel may cover many screen pixels. `gl.TEXTURE_MAG_FILTER` chooses how that enlargement looks. It can only be `gl.NEAREST` or `gl.LINEAR`; mipmaps do not help because there is no higher-detail image to use.
+- **Minification**: the texture is being shrunk on screen. One screen pixel may cover many texels. `gl.TEXTURE_MIN_FILTER` chooses how that shrinkage looks, and it may use mipmaps.
+
+For Saltwind's crate:
+
+```odin
+gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+```
+
+Read those as: "When a screen pixel covers many texels, use smooth filtering with mipmaps. When many screen pixels cover one texel, use smooth filtering without mipmaps."
 
 ### Mipmaps, explained properly
 
@@ -36,7 +123,9 @@ Minification has a nastier problem than blur. Picture the crate 300 units away, 
 
 **Mipmaps** pre-solve this: a chain of pre-averaged copies at ½, ¼, ⅛… resolution down to 1×1 (+33% memory, total). At sample time the GPU measures how fast uv changes between adjacent screen pixels (the *derivative* — this is why GPUs shade in 2×2 quads) and picks the mip level whose texels are roughly pixel-sized. Each sample then averages over the correct footprint, because the averaging already happened offline.
 
-The filter modes with `MIPMAP` in the name choose how levels combine: `gl.LINEAR_MIPMAP_LINEAR` — linear within a level *and* blending between two adjacent levels ("trilinear") — is the default-quality choice and what we use. `gl.GenerateMipmap(gl.TEXTURE_2D)` builds the whole chain in one call after upload. Magnification never uses mipmaps (there's nothing *more* detailed to use) — so `MAG_FILTER` must be plain `NEAREST`/`LINEAR`.
+The filter modes with `MIPMAP` in the name choose how levels combine. `gl.LINEAR_MIPMAP_LINEAR` — linear within one mip level, then linear again between two adjacent mip levels — is the default-quality choice and what we use. That extra blend across the mip chain is called **trilinear filtering**: two texture axes (`u` and `v`) plus the mip-level axis. `gl.GenerateMipmap(gl.TEXTURE_2D)` builds the whole chain in one call after upload.
+
+Magnification never uses mipmaps (there's nothing *more* detailed to use), so `MAG_FILTER` must be plain `NEAREST` or `LINEAR`.
 
 ### Texture units and samplers
 
@@ -87,6 +176,7 @@ Two excellent CC0 (no strings attached) libraries: [ambientCG](https://ambientcg
    	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
    	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 
+       gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
    	gl.TexImage2D(gl.TEXTURE_2D, 0, i32(format), tex.width, tex.height, 0, format, gl.UNSIGNED_BYTE, data)
    	gl.GenerateMipmap(gl.TEXTURE_2D)
    	return tex, true
@@ -154,6 +244,7 @@ Two excellent CC0 (no strings attached) libraries: [ambientCG](https://ambientcg
 A square wooden crate face, centered, upright, correctly oriented (any text/labels in the texture read normally).
 
 - Set both uv maxima from 1.0 to 4.0: the texture tiles 4×4 (that's `REPEAT` working). Back to 1.0.
+- Set all four uvs temporarily to `{0.5, 0.5}`: the whole quad becomes one sampled point from the crate, because every fragment asks the sampler the same question. Restore the corner uvs.
 - Swap `MAG_FILTER` to `gl.NEAREST` and maximize the window: individual texels as crisp squares. Back to `LINEAR`.
 - Shrink the window very small: no shimmer or sparkle on the crate — mipmaps earning their 33%.
 - Hold TAB: still two triangles under all that wood.
