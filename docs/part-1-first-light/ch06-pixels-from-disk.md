@@ -129,7 +129,68 @@ Magnification never uses mipmaps (there's nothing *more* detailed to use), so `M
 
 ### Texture units and samplers
 
-A shader samples through a `uniform sampler2D`. Which texture? Indirection: the GL context has ~16+ numbered **texture units**; `gl.ActiveTexture(gl.TEXTURE0 + n)` selects a unit, `gl.BindTexture` attaches a texture to it, and the sampler uniform is set to the integer `n`. One texture: unit 0, set the sampler to 0, done. The machinery exists so a single draw can read several textures at once — Chapter 22's terrain splatting uses four.
+A shader samples through a `uniform sampler2D`. Which texture? Indirection: the GL context has ~16+ numbered **texture units**. A texture unit is a numbered shelf the shader can look at during a draw.
+
+This is the part of the API that looks odd at first:
+
+```odin
+gl.ActiveTexture(gl.TEXTURE0)
+gl.BindTexture(gl.TEXTURE_2D, crate_tex.id)
+shader_set_i32(shader, "u_texture", 0)
+```
+
+Read it as three separate pieces of state:
+
+1. `gl.ActiveTexture(gl.TEXTURE0)` says, "future texture binds affect texture unit 0."
+2. `gl.BindTexture(gl.TEXTURE_2D, crate_tex.id)` says, "put `crate_tex` into the active unit's 2D texture slot."
+3. `shader_set_i32(shader, "u_texture", 0)` says, "the shader sampler named `u_texture` should read from texture unit 0."
+
+The sampler uniform is not set to the texture object's OpenGL handle. It is set to the **texture unit index**. The chain looks like this:
+
+```text
+uniform sampler2D u_texture
+        |
+        v
+texture unit 0
+        |
+        v
+unit 0's TEXTURE_2D binding
+        |
+        v
+crate_tex object
+```
+
+Or, as concrete context state:
+
+```text
+OpenGL context
+  active texture unit: TEXTURE0
+
+  texture unit 0
+    TEXTURE_2D       -> crate_tex
+    TEXTURE_CUBE_MAP -> none
+
+  texture unit 1
+    TEXTURE_2D       -> none
+```
+
+So `gl.BindTexture` does not mean "bind this texture globally." It means "bind this texture to this target slot on whichever texture unit is active right now."
+
+That is why multiple textures work:
+
+```odin
+gl.ActiveTexture(gl.TEXTURE0)
+gl.BindTexture(gl.TEXTURE_2D, crate_tex.id)
+shader_set_i32(shader, "u_crate", 0)
+
+gl.ActiveTexture(gl.TEXTURE1)
+gl.BindTexture(gl.TEXTURE_2D, sand_tex.id)
+shader_set_i32(shader, "u_sand", 1)
+```
+
+Now one draw can sample both `u_crate` and `u_sand`. Chapter 22's terrain splatting uses the same idea with four textures at once.
+
+This is the same binding machinery you use while loading a texture, just with a different purpose. During load, binding a texture makes it the object that receives `TexParameteri`, `TexImage2D`, and `GenerateMipmap`. During draw, binding a texture makes it reachable through the texture unit that a shader sampler points at. Same state slots, two moments in the texture's life.
 
 ### Where to get textures
 

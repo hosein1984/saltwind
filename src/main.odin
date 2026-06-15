@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:math"
 import "core:math/linalg/glsl"
 import "core:strings"
 import gl "vendor:OpenGL"
@@ -89,14 +90,14 @@ main :: proc() {
 
 	gl.BindVertexArray(0)
 
-	last_time := glfw.GetTime()
+	last_time := f32(glfw.GetTime())
 	reload_timer: f32 = 0.0
 
 	for !glfw.WindowShouldClose(window) {
 		// Timing
-		now := glfw.GetTime()
-		dt := f32(now - last_time)
-		last_time = now
+		t := f32(glfw.GetTime())
+		dt := t - last_time
+		last_time = t
 
 		reload_timer += dt
 		if reload_timer > 1.0 {
@@ -121,10 +122,24 @@ main :: proc() {
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 
 		gl.UseProgram(shader.id)
+
 		gl.BindVertexArray(vao)
-		shader_set_f32(shader, "u_time", f32(now))
+
 		gl.ActiveTexture(gl.TEXTURE0)
 		gl.BindTexture(gl.TEXTURE_2D, crate_tex.id)
+		shader_set_i32(shader, "u_texture", 0)
+
+		shader_set_f32(shader, "u_time", f32(t))
+
+		s := 0.6 + 0.1 * math.sin(2 * t)
+		transform := glsl.mat4Translate({0.5, 0.4, 0}) * glsl.mat4Rotate({0, 0, 1}, t * 0.8) * glsl.mat4Scale({s, s, 1.0})
+		shader_set_mat4(shader, "u_transform", transform)
+
+		gl.DrawElements(gl.TRIANGLES, len(indices), gl.UNSIGNED_INT, nil)
+
+		transform = glsl.mat4Translate({-0.5, -0.4, 0}) * glsl.mat4Rotate({0, 0, 1}, t * 0.8) * glsl.mat4Scale({s, s, 1.0})
+		shader_set_mat4(shader, "u_transform", transform)
+
 		gl.DrawElements(gl.TRIANGLES, len(indices), gl.UNSIGNED_INT, nil)
 
 		glfw.SwapBuffers(window)

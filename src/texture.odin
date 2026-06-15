@@ -34,6 +34,8 @@ texture_load :: proc(path: cstring) -> (tex: Texture, ok: bool) {
 	gl.TexImage2D(gl.TEXTURE_2D, 0, internal_format, tex.width, tex.height, 0, source_format, gl.UNSIGNED_BYTE, data)
 	gl.GenerateMipmap(gl.TEXTURE_2D)
 
+	gl.BindTexture(gl.TEXTURE_2D, 0)
+
 	return tex, true
 }
 
